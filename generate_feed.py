@@ -170,26 +170,38 @@ def get_meta(soup, prop=None, name=None):
     return ""
 
 
-def parse_date(text):
+def parse_date(text, soup=None):
     """
-    Procura por:
-    Publicado em DD/MM/AAAA
+    Procura por data de publicação via meta tags, tag <time> ou expressão regular:
+    - meta article:published_time
+    - tag <time datetime="...">
+    - Publicado em DD/MM/AAAA
     """
+    if soup:
+        pub_time = get_meta(soup, prop="article:published_time")
+        if pub_time:
+            try:
+                return datetime.fromisoformat(pub_time.replace("Z", "+00:00"))
+            except Exception:
+                pass
+
+        time_tag = soup.find("time")
+        if time_tag and time_tag.get("datetime"):
+            try:
+                return datetime.fromisoformat(time_tag["datetime"].replace("Z", "+00:00"))
+            except Exception:
+                pass
 
     m = DATE_REGEX.search(text)
+    if m:
+        try:
+            dt = datetime.strptime(m.group(1), "%d/%m/%Y")
+            return dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            pass
 
-    if not m:
-        return datetime.now(timezone.utc)
+    return datetime.now(timezone.utc)
 
-    try:
-
-        dt = datetime.strptime(m.group(1), "%d/%m/%Y")
-
-        return dt.replace(tzinfo=timezone.utc)
-
-    except Exception:
-
-        return datetime.now(timezone.utc)
 
 
 def parse_post(post):
@@ -253,7 +265,7 @@ def parse_post(post):
 
     page_text = soup.get_text(" ", strip=True)
 
-    published = parse_date(page_text)
+    published = parse_date(page_text, soup)
 
     return {
         "title": title,
@@ -314,7 +326,7 @@ def generate_feed(posts):
 
     for post in posts:
 
-        fe = fg.add_entry()
+        fe = fg.add_entry(order="append")
 
         fe.id(post["link"])
 
