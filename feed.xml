@@ -8,6 +8,7 @@
     <docs>http://www.rssboard.org/rss-specification</docs>
     <generator>GitHub Actions + FeedGen</generator>
     <language>pt-BR</language>
+<<<<<<< HEAD
     <lastBuildDate>Tue, 24 Feb 2026 12:47:12 +0000</lastBuildDate>
     <item>
       <title>Grade Vidro Vigia Picapes Leves Medias</title>
@@ -57,5 +58,8 @@
       <enclosure url="https://cdn-blog-backend.tiendanube.com/blogs/019/902/a55/3a271148aecdb30fd1f53b4/covers/019ae9e7-50d3-7553-be25-e5a14465a062.jpg" length="0" type="image/jpeg"/>
       <pubDate>Thu, 04 Dec 2025 15:07:22 +0000</pubDate>
     </item>
+=======
+    <lastBuildDate>Tue, 04 Aug 2026 13:48:32 +0000</lastBuildDate>
+>>>>>>> d3d5239a9fb7bea58a6fa982769cbe0b9ce9e9bd
   </channel>
 </rss>
