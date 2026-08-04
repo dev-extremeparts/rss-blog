@@ -1,6 +1,7 @@
 import gzip
 import io
 import re
+import time
 from datetime import datetime, timezone
 from email.utils import format_datetime
 
@@ -9,6 +10,12 @@ import xml.etree.ElementTree as ET
 
 from bs4 import BeautifulSoup
 from feedgen.feed import FeedGenerator
+
+try:
+    from curl_cffi import requests as curl_requests
+    HAS_CURL_CFFI = True
+except ImportError:
+    HAS_CURL_CFFI = False
 
 # ==========================================================
 # CONFIGURAÇÕES
@@ -36,16 +43,6 @@ HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Referer": "https://www.extremeparts.com.br/blog/",
-    "Sec-Ch-Ua": '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
-    "Sec-Ch-Ua-Mobile": "?0",
-    "Sec-Ch-Ua-Platform": '"Windows"',
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "same-origin",
-    "Sec-Fetch-User": "?1",
-    "Upgrade-Insecure-Requests": "1",
 }
 
 session = requests.Session()
@@ -57,18 +54,31 @@ session.headers.update(HEADERS)
 
 def request(url, timeout=30):
     """
-    Faz uma requisição com até 3 tentativas.
+    Faz uma requisição HTTP com suporte a impersonate (curl_cffi) para ignorar
+    bloqueios 403 Forbidden do Cloudflare/Tiendanube, com fallback e tentativas com backoff.
     """
     last_error = None
 
     for tentativa in range(3):
         try:
-            r = session.get(url, timeout=timeout)
-            r.raise_for_status()
-            return r
+            if HAS_CURL_CFFI:
+                try:
+                    r = curl_requests.get(url, impersonate="chrome", timeout=timeout)
+                    r.raise_for_status()
+                    return r
+                except Exception as e_curl:
+                    r = session.get(url, timeout=timeout)
+                    r.raise_for_status()
+                    return r
+            else:
+                r = session.get(url, timeout=timeout)
+                r.raise_for_status()
+                return r
         except Exception as e:
             last_error = e
             print(f"Tentativa {tentativa+1}/3 falhou: {url}")
+            if tentativa < 2:
+                time.sleep(2 * (tentativa + 1))
 
     raise last_error
 
@@ -270,6 +280,7 @@ def load_posts():
         post = parse_post(item)
         if post:
             posts.append(post)
+        time.sleep(0.5)
 
     posts.sort(
         key=lambda x: x["published"],

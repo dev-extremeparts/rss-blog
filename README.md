@@ -1,46 +1,6 @@
 # RSS Blog - Extreme Parts
 
-Gerador automático de feed RSS para o blog da [Extreme Parts](https://www.extremeparts.com.br/blog/).
-
-## 📌 Visão Geral
-
-Este repositório automatiza a criação e atualização contínua do arquivo `feed.xml` no formato RSS 2.0.
-
-- **Sitemap Scraper**: Localiza automaticamente o sitemap do blog através do `robots.txt`.
-- **Parsing Automático**: Extrai os metadados dos artigos (título, descrição, imagem de capa e data de publicação).
-- **Ordenação Cronológica**: Garante que o post mais recente apareça no topo do feed RSS.
-- **Automação via GitHub Actions**: Roda a cada hora para verificar novos artigos e publicar as alterações.
-
-## 🚀 Estrutura do Projeto
-
-```
-rss-blog/
-├── .github/
-│   └── workflows/
-│       └── generate-feed.yml   # Workflow do GitHub Actions (executa a cada hora)
-├── generate_feed.py            # Script principal Python para geração do RSS
-├── feed.xml                    # Arquivo RSS 2.0 gerado
-├── requirements.txt            # Dependências em Python
-└── README.md                   # Documentação do projeto
-```
-
-## 🛠️ Como Executar Localmente
-
-### 1. Instalar as dependências
-
-```bash
-pip install -r requirements.txt
-```
-
-### 2. Gerar o feed RSS
-
-```bash
-python generate_feed.py
-```
-
-O script atualizará o arquivo `feed.xml` no diretório raiz.
-
-## 📡 Link do Feed RSS
+Gerador automático de feed RSS 2.0 para o blog da [Extreme Parts](https://www.extremeparts.com.br/blog/).
 
 Após a execução da Action, o feed estará publicamente acessível em:
 `https://dev-extremeparts.github.io/rss-blog/feed.xml`

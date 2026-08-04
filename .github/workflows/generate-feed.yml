@@ -2,8 +2,8 @@ name: Generate RSS Feed
 
 on:
   schedule:
-    # Executa a cada hora
-    - cron: "0 * * * *"
+    # Executa diariamente às 06:00 (BRT) / 09:00 (UTC)
+    - cron: "0 9 * * *"
 
   # Permite executar manualmente pela aba Actions
   workflow_dispatch:
