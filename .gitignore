@@ -1,9 +1,124 @@
+# ==========================================================
+# SECURITY & SECRETS (Nível Hard)
+# ==========================================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.crt
+*.pfx
+*.asc
+*.gpg
+secring.gpg
+credentials
+credentials.json
+secrets.json
+secrets.yaml
+secrets.yml
+*.keystore
+
+# ==========================================================
+# PYTHON & CACHES
+# ==========================================================
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.python-version
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage / linting
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.pyt
+.hypothesis/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ==========================================================
+# VIRTUAL ENVIRONMENTS
+# ==========================================================
 .venv/
-env/
 venv/
-.env
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# ==========================================================
+# IDE & EDITORS
+# ==========================================================
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+*.sublime-project
+.project
+.pydevproject
+.settings/
+
+# ==========================================================
+# LOGS & TEMPORARY FILES
+# ==========================================================
+*.log
+logs/
+*.sqlite
+*.sqlite3
+*.db
+tmp/
+temp/
+
+# ==========================================================
+# OPERATING SYSTEMS
+# ==========================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
