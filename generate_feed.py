@@ -1,183 +1,360 @@
+import gzip
+import io
 import re
+from datetime import datetime, timezone
+from email.utils import format_datetime
+
 import requests
 import xml.etree.ElementTree as ET
 
 from bs4 import BeautifulSoup
-from datetime import datetime, timezone
-from email.utils import format_datetime
+from feedgen.feed import FeedGenerator
 
-SITEMAP_URL = "https://www.extremeparts.com.br/sitemap_blog.xml"
+# ==========================================================
+# CONFIGURAÇÕES
+# ==========================================================
+
+SITE_URL = "https://www.extremeparts.com.br"
+
+ROBOTS_URL = f"{SITE_URL}/robots.txt"
+
+BLOG_URL = f"{SITE_URL}/blog/"
 
 BLOG_TITLE = "Extreme Parts Blog"
-BLOG_LINK = "https://www.extremeparts.com.br/blog/"
-BLOG_DESCRIPTION = "Últimos artigos publicados no blog da Extreme Parts."
 
-MAX_ITEMS = 30
+BLOG_DESCRIPTION = "Últimos artigos publicados no Blog da Extreme Parts."
+
+FEED_URL = "https://dev-extremeparts.github.io/rss-blog/feed.xml"
+
+MAX_POSTS = 30
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; RSSFeedBot/1.0)"
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/138.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+    "Cache-Control": "no-cache",
 }
 
+session = requests.Session()
+session.headers.update(HEADERS)
 
-def get_meta(soup, property_name=None, name=None):
-    if property_name:
-        tag = soup.find("meta", property=property_name)
-        if tag:
-            return tag.get("content", "").strip()
+# ==========================================================
+# UTILITÁRIOS
+# ==========================================================
+
+def request(url, timeout=30):
+    """
+    Faz uma requisição com até 3 tentativas.
+    """
+
+    last_error = None
+
+    for tentativa in range(3):
+
+        try:
+
+            r = session.get(url, timeout=timeout)
+
+            r.raise_for_status()
+
+            return r
+
+        except Exception as e:
+
+            last_error = e
+
+            print(f"Tentativa {tentativa+1}/3 falhou: {url}")
+
+    raise last_error
+
+
+def discover_blog_sitemap():
+
+    print("Lendo robots.txt...")
+
+    robots = request(ROBOTS_URL).text
+
+    for line in robots.splitlines():
+
+        if line.lower().startswith("sitemap:"):
+
+            sitemap = line.split(":", 1)[1].strip()
+
+            if "blog" in sitemap:
+
+                print("Sitemap encontrado:")
+
+                print(sitemap)
+
+                return sitemap
+
+    raise Exception("Sitemap do blog não encontrado.")
+
+def read_sitemap():
+
+    sitemap_url = discover_blog_sitemap()
+
+    print("Baixando sitemap...")
+
+    data = request(sitemap_url).content
+
+    if sitemap_url.endswith(".gz"):
+
+        print("Descompactando sitemap...")
+
+        data = gzip.decompress(data)
+
+    root = ET.fromstring(data)
+
+    ns = {
+        "sm": "http://www.sitemaps.org/schemas/sitemap/0.9",
+        "image": "http://www.google.com/schemas/sitemap-image/1.1"
+    }
+
+    urls = []
+
+    for url in root.findall("sm:url", ns):
+
+        loc = url.find("sm:loc", ns).text.strip()
+
+        if loc.rstrip("/") == BLOG_URL.rstrip("/"):
+            continue
+
+        image = ""
+
+        img = url.find("image:image", ns)
+
+        if img is not None:
+
+            img_loc = img.find("image:loc", ns)
+
+            if img_loc is not None:
+
+                image = img_loc.text.strip()
+
+        urls.append({
+            "url": loc,
+            "image": image
+        })
+
+    print(f"{len(urls)} artigos encontrados.")
+
+    return urls    
+
+# ==========================================================
+# EXTRAÇÃO DOS POSTS
+# ==========================================================
+
+DATE_REGEX = re.compile(r"Publicado em\s+(\d{2}/\d{2}/\d{4})", re.IGNORECASE)
+
+
+def get_meta(soup, prop=None, name=None):
+    """
+    Retorna o conteúdo de uma meta tag.
+    """
+
+    if prop:
+        tag = soup.find("meta", property=prop)
+        if tag and tag.get("content"):
+            return tag["content"].strip()
 
     if name:
         tag = soup.find("meta", attrs={"name": name})
-        if tag:
-            return tag.get("content", "").strip()
+        if tag and tag.get("content"):
+            return tag["content"].strip()
 
     return ""
 
 
-print("Baixando sitemap...")
+def parse_date(text):
+    """
+    Procura por:
+    Publicado em DD/MM/AAAA
+    """
 
-resp = requests.get(SITEMAP_URL, headers=HEADERS, timeout=30)
-resp.raise_for_status()
+    m = DATE_REGEX.search(text)
 
-root = ET.fromstring(resp.content)
-
-ns = {
-    "sm": "http://www.sitemaps.org/schemas/sitemap/0.9",
-    "image": "http://www.google.com/schemas/sitemap-image/1.1"
-}
-
-posts = []
-
-for url in root.findall("sm:url", ns):
-
-    loc = url.find("sm:loc", ns).text.strip()
-
-    # ignora a home do blog
-    if loc.rstrip("/") == BLOG_LINK.rstrip("/"):
-        continue
-
-    image = ""
-
-    image_tag = url.find("image:image", ns)
-    if image_tag is not None:
-        image_loc = image_tag.find("image:loc", ns)
-        if image_loc is not None:
-            image = image_loc.text.strip()
-
-    print("Lendo:", loc)
+    if not m:
+        return datetime.now(timezone.utc)
 
     try:
 
-        page = requests.get(loc, headers=HEADERS, timeout=30)
-        page.raise_for_status()
+        dt = datetime.strptime(m.group(1), "%d/%m/%Y")
 
-        soup = BeautifulSoup(page.text, "lxml")
+        return dt.replace(tzinfo=timezone.utc)
 
-        title = get_meta(soup, property_name="og:title")
+    except Exception:
 
-        if not title:
-            h1 = soup.find("h1")
-            if h1:
-                title = h1.get_text(strip=True)
+        return datetime.now(timezone.utc)
 
-        if not title and soup.title:
-            title = soup.title.get_text(strip=True)
 
-        description = (
-            get_meta(soup, property_name="og:description")
-            or get_meta(soup, name="description")
-        )
+def parse_post(post):
 
-        if not image:
-            image = get_meta(soup, property_name="og:image")
+    url = post["url"]
 
-        # Procura a data no texto "Publicado em DD/MM/AAAA"
-        text = soup.get_text(" ", strip=True)
+    print(f"Lendo artigo: {url}")
 
-        m = re.search(r"Publicado em (\d{2}/\d{2}/\d{4})", text)
+    try:
 
-        if m:
-            dt = datetime.strptime(m.group(1), "%d/%m/%Y")
-            dt = dt.replace(tzinfo=timezone.utc)
-        else:
-            dt = datetime.now(timezone.utc)
-
-        posts.append({
-            "title": title,
-            "description": description,
-            "link": loc,
-            "image": image,
-            "date": dt
-        })
+        response = request(url)
 
     except Exception as e:
-        print(f"Erro em {loc}: {e}")
 
-posts.sort(key=lambda x: x["date"], reverse=True)
+        print("Erro:", e)
 
-posts = posts[:MAX_ITEMS]
+        return None
 
-rss = f'''<?xml version="1.0" encoding="UTF-8"?>
+    soup = BeautifulSoup(response.text, "lxml")
 
-<rss version="2.0"
-xmlns:media="http://search.yahoo.com/mrss/"
-xmlns:atom="http://www.w3.org/2005/Atom">
+    # -------------------------
+    # TÍTULO
+    # -------------------------
 
-<channel>
+    title = get_meta(soup, prop="og:title")
 
-<title>{BLOG_TITLE}</title>
+    if not title:
 
-<link>{BLOG_LINK}</link>
+        h1 = soup.find("h1")
 
-<description>{BLOG_DESCRIPTION}</description>
+        if h1:
+            title = h1.get_text(" ", strip=True)
 
-<language>pt-BR</language>
+    if not title and soup.title:
 
-<atom:link
-href="feed.xml"
-rel="self"
-type="application/rss+xml"/>
+        title = soup.title.get_text(" ", strip=True)
 
-'''
+    # -------------------------
+    # DESCRIÇÃO
+    # -------------------------
 
-for post in posts:
+    description = get_meta(soup, prop="og:description")
 
-    rss += f"""
-<item>
+    if not description:
 
-<title><![CDATA[{post['title']}]]></title>
+        description = get_meta(soup, name="description")
 
-<link>{post['link']}</link>
+    # -------------------------
+    # IMAGEM
+    # -------------------------
 
-<guid isPermaLink="true">{post['link']}</guid>
+    image = post["image"]
 
-<pubDate>{format_datetime(post['date'])}</pubDate>
+    if not image:
 
-<description><![CDATA[{post['description']}]]></description>
-"""
+        image = get_meta(soup, prop="og:image")
 
-    if post["image"]:
-        rss += f"""
-<media:content
-url="{post['image']}"
-medium="image"/>
-"""
+    # -------------------------
+    # DATA
+    # -------------------------
 
-    rss += """
+    page_text = soup.get_text(" ", strip=True)
 
-</item>
+    published = parse_date(page_text)
 
-"""
+    return {
+        "title": title,
+        "description": description,
+        "link": url,
+        "image": image,
+        "published": published,
+    }
 
-rss += """
 
-</channel>
+def load_posts():
 
-</rss>
-"""
+    sitemap_posts = read_sitemap()
 
-with open("feed.xml", "w", encoding="utf-8") as f:
-    f.write(rss)
+    posts = []
 
-print()
-print(f"RSS gerado com {len(posts)} artigos.")
-print("Arquivo salvo como feed.xml")
+    for item in sitemap_posts:
+
+        post = parse_post(item)
+
+        if post:
+
+            posts.append(post)
+
+    posts.sort(
+        key=lambda x: x["published"],
+        reverse=True
+    )
+
+    posts = posts[:MAX_POSTS]
+
+    print()
+
+    print(f"{len(posts)} artigos processados.")
+
+    return posts    
+
+# ==========================================================
+# GERAÇÃO DO RSS
+# ==========================================================
+
+def generate_feed(posts):
+
+    print("Gerando RSS...")
+
+    fg = FeedGenerator()
+
+    fg.id(BLOG_URL)
+    fg.title(BLOG_TITLE)
+    fg.link(href=BLOG_URL, rel="alternate")
+    fg.link(href=FEED_URL, rel="self")
+    fg.description(BLOG_DESCRIPTION)
+    fg.language("pt-BR")
+    fg.generator("GitHub Actions + FeedGen")
+
+    if posts:
+        fg.lastBuildDate(posts[0]["published"])
+
+    for post in posts:
+
+        fe = fg.add_entry()
+
+        fe.id(post["link"])
+
+        fe.title(post["title"])
+
+        fe.link(href=post["link"])
+
+        fe.description(post["description"])
+
+        fe.pubDate(post["published"])
+
+        if post["image"]:
+
+            fe.enclosure(
+                post["image"],
+                "0",
+                "image/jpeg"
+            )
+
+    fg.rss_file("feed.xml", pretty=True)
+
+    print("feed.xml criado com sucesso.")    
+
+# ==========================================================
+# MAIN
+# ==========================================================
+
+def main():
+
+    print("=" * 60)
+    print("RSS Generator - Extreme Parts")
+    print("=" * 60)
+
+    posts = load_posts()
+
+    generate_feed(posts)
+
+    print()
+    print("Concluído!")
+
+
+if __name__ == "__main__":
+    main()    
